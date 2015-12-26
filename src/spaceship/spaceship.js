@@ -48,14 +48,27 @@ var SpaceShip = mouseMove
     } );
 
 const ENEMY_FREQ = 1500;
+const ENEMY_SHOOTING_FREQ = 750;
 var Enemies = Rx.Observable.interval( ENEMY_FREQ )
     .scan( enemies => {
-        enemies.push( {
+        let enemy = {
             x: +( Math.random() * canvas.width ),
-            y: -30
-        } );
+            y: -30,
+            shots: []
+        };
 
-        return enemies;
+        Rx.Observable.interval( ENEMY_SHOOTING_FREQ )
+            .subscribe(() => {
+                if ( !enemy.isDead )
+                    enemy.shots.push( { x: enemy.x, y: enemy.y } );
+
+                enemy.shots = enemy.shots.filter( isVisible );
+            } );
+
+        enemies.push( enemy );
+        return enemies
+            .filter( isVisible )
+            .filter( e => !e.isDead && e.shots.length === 0 );
     }, [] );
 
 var playerFiring = Rx.Observable
@@ -90,31 +103,73 @@ var HeroShots = Rx.Observable
 
 var SHOOTING_SPEED = 15;
 
-function paintHeroShots( shots ) {
-    shots.forEach( shot => {
-        console.log( "Shot Fired!", shot );
-        shot.y -= SHOOTING_SPEED;
+var ScoreSubject = new Rx.Subject();
+var score = ScoreSubject
+    .scan(( acc, current ) => {
+        return acc + current;
+    }, 0 )
+    .concat( Rx.Observable.return( 0 ) );
 
+function gameOver( ship, enemies ) {
+    return enemies
+        .some( enemy => {
+            if ( collision( enemy, ship ) )
+                return true;
+
+            return enemy.shots
+                .some( shot => collision( shot, ship ) );
+        } );
+}
+
+const SCORE_INCREASE = 10;
+function paintHeroShots( shots, enemies ) {
+    shots.forEach(( shot, i ) => {
+
+        for ( var l = 0; enemies < length; l++ ) {
+            let enemy = enemies[l];
+
+            if ( !enemy.isDead && collision( shot, enemy ) ) {
+                ScoreSubject.onNext( SCORE_INCREASE );
+                enemy.isDead = true;
+                shot.x = shot.y = -100;
+                break;
+            }
+        }
+
+        shot.y -= SHOOTING_SPEED;
         drawTriangle( shot.x, shot.y, 5, "#ffff00", "up" );
     } );
 }
 
 var Game = Rx.Observable
-    .combineLatest( StarStream, SpaceShip, Enemies, HeroShots,
-        ( stars, spaceship, enemies, heroShots ) => {
+    .combineLatest( StarStream, SpaceShip, Enemies, HeroShots, ScoreSubject,
+        ( stars, spaceship, enemies, heroShots, score ) => {
             return {
                 stars: stars,
                 spaceship: spaceship,
                 enemies: enemies,
-                shots: heroShots
+                shots: heroShots,
+                score: score
             };
         } )
     .sample( SPEED )
+    .takeWhile( actors => gameOver( actors.spaceship, actors.enemies ) === false )
     .subscribe( renderScene );
+
+function paintScore( score ) {
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 26px sans-serif";
+    ctx.fillText( `Score ${score}`, 40, 30 );
+}
+
+function collision( target1, target2 ) {
+    return ( target1.x > target2.x - 20 && target1.x > target2.x + 20 ) &&
+        ( target1.y > target2.y - 20 && target1.y > target2.y + 20 );
+}
 
 function isVisible( obj ) {
     return obj.x > -40 && obj.x < canvas.width + 40 &&
-            obj.y > -40 && obj.y < canvas.height + 40;
+            obj.y > -40 && obj.y < canvas.height - 40;
 }
 
 function getRandomInt( min, max ) {
@@ -122,11 +177,20 @@ function getRandomInt( min, max ) {
 }
 
 function paintEnemies( enemies ) {
-    enemies.forEach( e => {
-        e.y += 5;
-        e.x += getRandomInt( -15, 15 );
-        drawTriangle( e.x, e.y, 20, "#00ff00", "down" );
+    enemies.forEach( enemy => {
+        enemy.y += 5;
+        enemy.x += getRandomInt( -15, 15 );
+
+        if ( !enemy.isDead )
+            drawTriangle( enemy.x, enemy.y, 20, "#00ff00", "down" );
+
+        enemy.shots.forEach( shot => {
+            shot.y += SHOOTING_SPEED;
+            drawTriangle( shot.x, shot.y, 5, "#00ffff", "down" );
+        } );
     } );
+
+
 }
 
 function drawTriangle( x, y, width, color, direction ) {
@@ -156,6 +220,7 @@ function renderScene( actors ) {
     paintSpaceship( actors.spaceship.x, actors.spaceship.y );
     paintEnemies( actors.enemies );
     paintHeroShots( actors.shots );
+    paintScore( actors.score );
 }
 
 

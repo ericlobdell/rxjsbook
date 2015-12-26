@@ -43,13 +43,24 @@ var SpaceShip = mouseMove.map(function (e) {
 });
 
 var ENEMY_FREQ = 1500;
+var ENEMY_SHOOTING_FREQ = 750;
 var Enemies = Rx.Observable.interval(ENEMY_FREQ).scan(function (enemies) {
-    enemies.push({
+    var enemy = {
         x: +(Math.random() * canvas.width),
-        y: -30
+        y: -30,
+        shots: []
+    };
+
+    Rx.Observable.interval(ENEMY_SHOOTING_FREQ).subscribe(function () {
+        if (!enemy.isDead) enemy.shots.push({ x: enemy.x, y: enemy.y });
+
+        enemy.shots = enemy.shots.filter(isVisible);
     });
 
-    return enemies;
+    enemies.push(enemy);
+    return enemies.filter(isVisible).filter(function (e) {
+        return !e.isDead && e.shots.length === 0;
+    });
 }, []);
 
 var playerFiring = Rx.Observable.merge(Rx.Observable.fromEvent(canvas, "click"), Rx.Observable.fromEvent(canvas, "keydown").filter(function (e) {
@@ -74,26 +85,65 @@ var HeroShots = Rx.Observable.combineLatest(playerFiring, SpaceShip, function (s
 
 var SHOOTING_SPEED = 15;
 
-function paintHeroShots(shots) {
-    shots.forEach(function (shot) {
-        console.log("Shot Fired!", shot);
-        shot.y -= SHOOTING_SPEED;
+var ScoreSubject = new Rx.Subject();
+var score = ScoreSubject.scan(function (acc, current) {
+    return acc + current;
+}, 0).concat(Rx.Observable.return(0));
 
+function gameOver(ship, enemies) {
+    return enemies.some(function (enemy) {
+        if (collision(enemy, ship)) return true;
+
+        return enemy.shots.some(function (shot) {
+            return collision(shot, ship);
+        });
+    });
+}
+
+var SCORE_INCREASE = 10;
+function paintHeroShots(shots, enemies) {
+    shots.forEach(function (shot, i) {
+
+        for (var l = 0; enemies < length; l++) {
+            var enemy = enemies[l];
+
+            if (!enemy.isDead && collision(shot, enemy)) {
+                ScoreSubject.onNext(SCORE_INCREASE);
+                enemy.isDead = true;
+                shot.x = shot.y = -100;
+                break;
+            }
+        }
+
+        shot.y -= SHOOTING_SPEED;
         drawTriangle(shot.x, shot.y, 5, "#ffff00", "up");
     });
 }
 
-var Game = Rx.Observable.combineLatest(StarStream, SpaceShip, Enemies, HeroShots, function (stars, spaceship, enemies, heroShots) {
+var Game = Rx.Observable.combineLatest(StarStream, SpaceShip, Enemies, HeroShots, ScoreSubject, function (stars, spaceship, enemies, heroShots, score) {
     return {
         stars: stars,
         spaceship: spaceship,
         enemies: enemies,
-        shots: heroShots
+        shots: heroShots,
+        score: score
     };
-}).sample(SPEED).subscribe(renderScene);
+}).sample(SPEED).takeWhile(function (actors) {
+    return gameOver(actors.spaceship, actors.enemies) === false;
+}).subscribe(renderScene);
+
+function paintScore(score) {
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 26px sans-serif";
+    ctx.fillText("Score " + score, 40, 30);
+}
+
+function collision(target1, target2) {
+    return target1.x > target2.x - 20 && target1.x > target2.x + 20 && target1.y > target2.y - 20 && target1.y > target2.y + 20;
+}
 
 function isVisible(obj) {
-    return obj.x > -40 && obj.x < canvas.width + 40 && obj.y > -40 && obj.y < canvas.height + 40;
+    return obj.x > -40 && obj.x < canvas.width + 40 && obj.y > -40 && obj.y < canvas.height - 40;
 }
 
 function getRandomInt(min, max) {
@@ -101,10 +151,16 @@ function getRandomInt(min, max) {
 }
 
 function paintEnemies(enemies) {
-    enemies.forEach(function (e) {
-        e.y += 5;
-        e.x += getRandomInt(-15, 15);
-        drawTriangle(e.x, e.y, 20, "#00ff00", "down");
+    enemies.forEach(function (enemy) {
+        enemy.y += 5;
+        enemy.x += getRandomInt(-15, 15);
+
+        if (!enemy.isDead) drawTriangle(enemy.x, enemy.y, 20, "#00ff00", "down");
+
+        enemy.shots.forEach(function (shot) {
+            shot.y += SHOOTING_SPEED;
+            drawTriangle(shot.x, shot.y, 5, "#00ffff", "down");
+        });
     });
 }
 
@@ -137,5 +193,6 @@ function renderScene(actors) {
     paintSpaceship(actors.spaceship.x, actors.spaceship.y);
     paintEnemies(actors.enemies);
     paintHeroShots(actors.shots);
+    paintScore(actors.score);
 }
 //# sourceMappingURL=spaceship.js.map
