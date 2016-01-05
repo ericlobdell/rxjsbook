@@ -8,7 +8,7 @@ var rename = require( "gulp-rename" );
 var concat = require( 'gulp-concat' );
 var uglify = require( 'gulp-uglify' );
 var watch = require( 'gulp-watch' );
-var reload = require( 'gulp-livereload' );
+var webserver = require('gulp-webserver');
 
 gulp.task( 'build', function () {
     return gulp.src( ['src/**/*.js' ] )
@@ -17,9 +17,16 @@ gulp.task( 'build', function () {
             presets: ['es2015']
         } ) )
 		.pipe( sourcemaps.write( '.' ) )
-		.pipe( gulp.dest( 'dist' ) )
-        .pipe( reload() );
+		.pipe( gulp.dest( 'dist' ) );
 } );
+
+gulp.task('webserver', function() {
+  gulp.src('./')
+    .pipe(webserver({
+      fallback: 'index.html',
+      open: true
+    }));
+});
 
 gulp.task( "less", function () {
     gulp.src( ["src/less/*.less"] )
@@ -28,21 +35,13 @@ gulp.task( "less", function () {
         .pipe( rename( {
             suffix: ".min"
         } ) )
-        .pipe( gulp.dest( "dist/css" ) )
-        .pipe( reload() );
-} );
-
-gulp.task( "reload", function () {
-
-    gulp.src( "./index.html" )
-        .pipe( reload() );
+        .pipe( gulp.dest( "dist/css" ) );
 } );
 
 gulp.task( "watch", function () {
-
-    gulp.watch( 'src/**/*.js', ["build", "reload"] );
+    gulp.watch( 'src/**/*.js', ["build", "webserver"] );
 } );
 
 gulp.task( "default", function () {
-    gulp.start( ["build", "watch"] );
+    gulp.start( ["build", "webserver", "watch"] );
 } );
