@@ -24,12 +24,14 @@ function onConnect( ws ) {
     } );
 
     Rx.Observable.fromEvent( stream, "tweet" )
-      .subscribe( function ( tweet ) {
+      .subscribe( tweet => {
           console.log( "TWEET: ", tweet );
-          ws.send( JSON.stringify( tweet ), function ( error ) {
+
+          ws.send( JSON.stringify( tweet ), error => {
               if ( error )
-                  console.log( "There was an error sending message." )
+                  console.log( "There was an error sending message." );
           } );
+
       } );
 
     var onMessage = Rx.Observable.fromEvent( ws, 'message' )
