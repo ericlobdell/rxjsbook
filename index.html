@@ -8,23 +8,39 @@
             padding: 0;
             height: 100%;
         }
-        #map { height: 100%; }
+        #map { height: 500px; }
+
+        #quakes_table {
+            max-height: 500px;
+            overflow-y: scroll;
+        }
     </style>
     <link href="Scripts/leaflet/leaflet.css" rel="stylesheet" />
-
 
     <script src="Scripts/leaflet/leaflet.js"></script>
     <script src="Scripts/rx.all.js"></script>
     <script src="Scripts/rx.dom.js"></script>
 
-    
 	<meta charset="utf-8" />
 </head>
 <body>
     <h3>RxJs</h3>
 
     <div id="map"></div>
+    <div id="quakes_table">
+        <table>
+            <thead>
+                <tr>
+                    <th>Location</th>
+                    <th>Magnitude</th>
+                    <th>Time</th>
+                </tr>
+            </thead>
+            <tbody id="quakes-info"></tbody>
+        </table>
+    </div>
+    
 
-    <script src="dist/all.js"></script>
+    <script src="dist/js/earthquake_viz.js"></script>
 </body>
 </html>
